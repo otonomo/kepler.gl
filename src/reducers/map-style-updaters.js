@@ -60,8 +60,11 @@ const getDefaultState = () => {
     ),
     // save mapbox access token
     mapboxApiAccessToken: null,
+    mapboxApiUrl: null,
+    mapStylesReplaceDefault: false,
     inputStyle: getInitialInputStyle(),
-    threeDBuildingColor: hexToRgb(DEFAULT_BLDG_COLOR)
+    threeDBuildingColor: hexToRgb(DEFAULT_BLDG_COLOR),
+    custom3DBuildingColor: false
   };
 };
 
@@ -111,8 +114,10 @@ const mapStyleUpdaters = null;
  * @property {string} styleType - Default: `'dark'`
  * @property {Object} visibleLayerGroups - Default: `{}`
  * @property {Object} topLayerGroups - Default: `{}`
- * @property {Object} mapStyles - mapping from style key to style objct
+ * @property {Object} mapStyles - mapping from style key to style object
  * @property {string} mapboxApiAccessToken - Default: `null`
+ * @Property {string} mapboxApiUrl - Default null
+ * @Property {Boolean} mapStylesReplaceDefault - Default: `false`
  * @property {Object} inputStyle - Default: `{}`
  * @property {Array} threeDBuildingColor - Default: `[r, g, b]`
  * @public
@@ -171,37 +176,53 @@ export function getMapStyles({
         visibleLayerGroups: topLayers
       })
     : null;
-  const threeDBuildingColor = get3DBuildingColor(mapStyle);
-  return {bottomMapStyle, topMapStyle, editable, threeDBuildingColor};
+
+  return {bottomMapStyle, topMapStyle, editable};
+}
+
+function findLayerFillColor(layer) {
+  return layer && layer.paint && layer.paint['background-color'];
 }
 
 function get3DBuildingColor(style) {
   // set building color to be the same as the background color.
+  if (!style.style) {
+    return DEFAULT_BLDG_COLOR;
+  }
+
   const backgroundLayer = (style.style.layers || []).find(
     ({id}) => id === 'background'
   );
+
+  const buildingLayer = (style.style.layers || []).find(({id}) =>
+    id.match(/building/)
+  );
+
   const buildingColor =
-    backgroundLayer &&
-    backgroundLayer.paint &&
-    backgroundLayer.paint['background-color']
-      ? backgroundLayer.paint['background-color']
-      : DEFAULT_BLDG_COLOR;
+    findLayerFillColor(buildingLayer) ||
+    findLayerFillColor(backgroundLayer) ||
+    DEFAULT_BLDG_COLOR;
+
   // brighten or darken building based on style
   const operation = style.id.match(/(?=(dark|night))/) ? 'brighter' : 'darker';
+
   const alpha = 0.2;
   const rgbObj = rgb(buildingColor)[operation]([alpha]);
   return [rgbObj.r, rgbObj.g, rgbObj.b];
 }
 
 function getLayerGroupsFromStyle(style) {
-  return Array.isArray(style.layers) ? DEFAULT_LAYER_GROUPS.filter(
-    lg => style.layers.filter(lg.filter).length
-  ) : [];
+  return Array.isArray(style.layers)
+    ? DEFAULT_LAYER_GROUPS.filter(lg => style.layers.filter(lg.filter).length)
+    : [];
 }
 
 // Updaters
 /**
- * Propagate `mapStyle` reducer with `mapboxApiAccessToken`
+ * Propagate `mapStyle` reducer with `mapboxApiAccessToken` and `mapStylesReplaceDefault`.
+ * if mapStylesReplaceDefault is true mapStyles is emptied; loadMapStylesUpdater() will
+ * populate mapStyles.
+ *
  * @memberof mapStyleUpdaters
  * @param {Object} state
  * @param {Object} action
@@ -213,8 +234,15 @@ function getLayerGroupsFromStyle(style) {
 export const initMapStyleUpdater = (state, action) => ({
   ...state,
   // save mapbox access token to map style state
-  mapboxApiAccessToken: (action.payload || {}).mapboxApiAccessToken
+  mapboxApiAccessToken: (action.payload || {}).mapboxApiAccessToken,
+  mapboxApiUrl: (action.payload || {}).mapboxApiUrl,
+  mapStyles:
+    action.payload && !action.payload.mapStylesReplaceDefault
+      ? state.mapStyles
+      : {},
+  mapStylesReplaceDefault: action.payload.mapStylesReplaceDefault || false
 });
+// });
 
 /**
  * Update `visibleLayerGroups`to change layer group visibility
@@ -257,10 +285,13 @@ export const mapStyleChangeUpdater = (state, {payload: styleType}) => {
     state.visibleLayerGroups
   );
 
+  const threeDBuildingColor = state.custom3DBuildingColor ? state.threeDBuildingColor :
+  get3DBuildingColor(state.mapStyles[styleType]);
   return {
     ...state,
     styleType,
     visibleLayerGroups,
+    threeDBuildingColor,
     ...getMapStyles({
       ...state,
       visibleLayerGroups,
@@ -280,14 +311,18 @@ export const mapStyleChangeUpdater = (state, {payload: styleType}) => {
  */
 export const loadMapStylesUpdater = (state, action) => {
   const newStyles = action.payload || {};
-  const addLayerGroups = Object.keys(newStyles).reduce((accu, id) => ({
-    ...accu,
-    [id]: {
-      ...newStyles[id],
-      layerGroups:
-        newStyles[id].layerGroups || getLayerGroupsFromStyle(newStyles[id].style)
-    }
-  }), {});
+  const addLayerGroups = Object.keys(newStyles).reduce(
+    (accu, id) => ({
+      ...accu,
+      [id]: {
+        ...newStyles[id],
+        layerGroups:
+          newStyles[id].layerGroups ||
+          getLayerGroupsFromStyle(newStyles[id].style)
+      }
+    }),
+    {}
+  );
 
   // add new styles to state
   const newState = {
@@ -313,10 +348,14 @@ export const loadMapStylesUpdater = (state, action) => {
  * @public
  */
 // do nothing for now, if didn't load, skip it
-export const loadMapStyleErrUpdater = (state) => state;
+export const loadMapStyleErrUpdater = state => state;
 
 export const requestMapStylesUpdater = (state, {payload: mapStyles}) => {
-  const loadMapStyleTasks = getLoadMapStyleTasks(mapStyles, state.mapboxApiAccessToken);
+  const loadMapStyleTasks = getLoadMapStyleTasks(
+    mapStyles,
+    state.mapboxApiAccessToken,
+    state.mapboxApiUrl
+  );
   return withTask(state, loadMapStyleTasks);
 };
 
@@ -335,30 +374,44 @@ export const receiveMapConfigUpdater = (state, {payload: {mapStyle}}) => {
 
   // if saved custom mapStyles load the style object
   const loadMapStyleTasks = mapStyle.mapStyles
-    ? getLoadMapStyleTasks(mapStyle.mapStyles, state.mapboxApiAccessToken)
+    ? getLoadMapStyleTasks(
+        mapStyle.mapStyles,
+        state.mapboxApiAccessToken,
+        state.mapboxApiUrl
+      )
     : null;
 
   // merge default mapStyles
-  const merged = mapStyle.mapStyles ? {
-    ...mapStyle,
-    mapStyles: {
-      ...mapStyle.mapStyles,
-      ...state.mapStyles
-    }
-  } : mapStyle;
+  const merged = mapStyle.mapStyles
+    ? {
+        ...mapStyle,
+        mapStyles: {
+          ...mapStyle.mapStyles,
+          ...state.mapStyles
+        }
+      }
+    : mapStyle;
 
+  // set custom3DBuildingColor: true if mapStyle contains threeDBuildingColor
+  merged.custom3DBuildingColor = Boolean(mapStyle.threeDBuildingColor) || merged.custom3DBuildingColor;
   const newState = mapConfigChangeUpdater(state, {payload: merged});
 
   return loadMapStyleTasks ? withTask(newState, loadMapStyleTasks) : newState;
 };
 
-function getLoadMapStyleTasks(mapStyles, mapboxApiAccessToken) {
+function getLoadMapStyleTasks(mapStyles, mapboxApiAccessToken, mapboxApiUrl) {
   return [
     Task.all(
       Object.values(mapStyles)
         .map(({id, url, accessToken}) => ({
           id,
-          url: isValidStyleUrl(url) ? getStyleDownloadUrl(url, accessToken || mapboxApiAccessToken) : url
+          url: isValidStyleUrl(url)
+            ? getStyleDownloadUrl(
+                url,
+                accessToken || mapboxApiAccessToken,
+                mapboxApiUrl
+              )
+            : url
         }))
         .map(LOAD_MAP_STYLE_TASK)
     ).bimap(
@@ -392,6 +445,7 @@ export const resetMapConfigMapStyleUpdater = state => {
   const emptyConfig = {
     ...INITIAL_MAP_STYLE,
     mapboxApiAccessToken: state.mapboxApiAccessToken,
+    mapboxApiUrl: state.mapboxApiUrl,
     ...state.initialState,
     mapStyles: state.mapStyles,
     initialState: state.initialState
@@ -480,6 +534,12 @@ export const addCustomMapStyleUpdater = state => {
   // set new style
   return mapStyleChangeUpdater(newState, {payload: styleId});
 };
+
+export const set3dBuildingColorUpdater = (state, {payload: color}) => ({
+  ...state,
+  threeDBuildingColor: color,
+  custom3DBuildingColor: true
+});
 
 export function getInitialInputStyle() {
   return {

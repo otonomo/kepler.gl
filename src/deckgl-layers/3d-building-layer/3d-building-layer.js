@@ -21,7 +21,7 @@
 import {CompositeLayer} from '@deck.gl/core';
 import {TileLayer as DeckGLTileLayer} from '@deck.gl/geo-layers';
 import {getTileData} from './3d-building-utils';
-import {_SolidPolygonLayer as SolidPolygonLayer} from '@deck.gl/layers';
+import {SolidPolygonLayer} from '@deck.gl/layers';
 
 export default class ThreeDBuildingLayer extends CompositeLayer {
   // this layer add its subLayers to the redux store, and push sample data
@@ -51,12 +51,12 @@ export default class ThreeDBuildingLayer extends CompositeLayer {
   }
 
   renderLayers() {
-
     return [
       new DeckGLTileLayer({
-        getTileData: (args) => getTileData(this.props.mapboxApiAccessToken, args),
+        getTileData: (args) => getTileData(this.props.mapboxApiUrl, this.props.mapboxApiAccessToken, args),
         minZoom: 13,
-        renderSubLayers: this.renderSubLayers.bind(this)
+        renderSubLayers: this.renderSubLayers.bind(this),
+        updateTriggers: this.props.updateTriggers
       })
     ];
   }

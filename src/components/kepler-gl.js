@@ -97,6 +97,7 @@ function KeplerGlFactory(
   class KeplerGL extends Component {
     static defaultProps = {
       mapStyles: [],
+      mapStylesReplaceDefault: false,
       width: 800,
       height: 800,
       appName: KEPLER_GL_NAME,
@@ -183,6 +184,7 @@ function KeplerGlFactory(
         width,
         height,
         mapboxApiAccessToken,
+        mapboxApiUrl,
         getMapboxRef,
 
         // redux state
@@ -239,7 +241,9 @@ function KeplerGlFactory(
 
       const mapFields = {
         datasets,
+        getMapboxRef,
         mapboxApiAccessToken,
+        mapboxApiUrl,
         mapState,
         mapStyle,
         mapControls: uiState.mapControls,
@@ -268,7 +272,6 @@ function KeplerGlFactory(
               index={0}
               {...mapFields}
               mapLayers={isSplit ? splitMaps[0].layers : null}
-              getMapboxRef={getMapboxRef}
             />
           ]
         : splitMaps.map((settings, index) => (
@@ -277,7 +280,6 @@ function KeplerGlFactory(
               index={index}
               {...mapFields}
               mapLayers={splitMaps[index].layers}
-              getMapboxRef={getMapboxRef}
             />
           ));
 
@@ -332,6 +334,7 @@ function KeplerGlFactory(
               mapState={mapState}
               uiState={uiState}
               mapboxApiAccessToken={mapboxApiAccessToken}
+              mapboxApiUrl={mapboxApiUrl}
               visStateActions={visStateActions}
               uiStateActions={uiStateActions}
               mapStyleActions={mapStyleActions}

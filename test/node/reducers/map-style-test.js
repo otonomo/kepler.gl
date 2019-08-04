@@ -22,7 +22,7 @@ import test from 'tape';
 import {drainTasksForTesting, succeedTaskWithValues} from 'react-palm/tasks';
 
 import reducer from 'reducers/map-style';
-import {INITIAL_MAP_STYLE} from 'reducers/map-style-updaters';
+import {INITIAL_MAP_STYLE, loadMapStylesUpdater} from 'reducers/map-style-updaters';
 import {keplerGlInit, receiveMapConfig} from 'actions/actions';
 import SchemaManager from 'schemas';
 import {DEFAULT_MAP_STYLES} from 'constants/default-settings';
@@ -58,9 +58,53 @@ test('#mapStyleReducer -> INIT', t => {
     {
       ...INITIAL_MAP_STYLE,
       initialState: {},
-      mapboxApiAccessToken: 'smoothies_secret_token'
+      mapboxApiAccessToken: 'smoothies_secret_token',
+      mapboxApiUrl: undefined
     },
-    'initialie map style with mapboxApiAccessToken'
+    'initialize map style with mapboxApiAccessToken'
+  );
+  t.end();
+});
+
+test('#mapStyleReducer -> INIT & LOAD_MAP_STYLES', t => {
+  const myMapStyle = {
+    id    : 'default dark v9',
+    label : 'default dark v9',
+    url   : 'mapbox://styles/mapbox/dark-v9',
+    icon  : `images/light.png`,
+    layerGroups: []
+  };
+  const newState = reducer(
+    InitialMapStyle,
+    keplerGlInit({
+      mapboxApiAccessToken: 'smoothies_secret_token',
+      mapStylesReplaceDefault: true
+    })
+  );
+
+  t.deepEqual(
+    newState,
+    {
+      ...INITIAL_MAP_STYLE,
+      mapStyles: {},
+      initialState: {},
+      mapboxApiAccessToken: 'smoothies_secret_token',
+      mapboxApiUrl: undefined,
+      mapStylesReplaceDefault: true
+    },
+    'initialize map style with mapboxApiAccessToken and mapStylesReplaceDefault; mapStyles empty'
+  );
+
+  const mapStyles = {
+    [myMapStyle.id]: myMapStyle
+  };
+
+  const finalState = loadMapStylesUpdater(newState, { payload: mapStyles });
+
+  t.deepEqual(
+    finalState,
+    {...newState, mapStyles},
+    'user provided mapStyles are populated, defaults ignored'
   );
 
   t.end();
@@ -73,6 +117,7 @@ test('#mapStyleReducer -> RECEIVE_MAP_CONFIG', t => {
   );
 
   const stateToSave = StateWCustomMapStyle;
+
   // save state
   const savedState = SchemaManager.getConfigToSave(stateToSave);
 
@@ -108,6 +153,8 @@ test('#mapStyleReducer -> RECEIVE_MAP_CONFIG', t => {
       ...defaultMapStyles
     },
     mapboxApiAccessToken: 'smoothies_secret_token',
+    mapboxApiUrl: undefined,
+    mapStylesReplaceDefault: false,
     inputStyle: {
       accessToken: null,
       error: false,
@@ -117,7 +164,8 @@ test('#mapStyleReducer -> RECEIVE_MAP_CONFIG', t => {
       url: null,
       custom: true
     },
-    threeDBuildingColor: [209, 206, 199],
+    threeDBuildingColor: [1, 2, 3],
+    custom3DBuildingColor: true,
     initialState: {}
   };
 
@@ -174,6 +222,8 @@ test('#mapStyleReducer -> RECEIVE_MAP_CONFIG', t => {
     topLayerGroups: {},
     mapStyles: expectedMapStyles,
     mapboxApiAccessToken: 'smoothies_secret_token',
+    mapboxApiUrl: undefined,
+    mapStylesReplaceDefault: false,
     inputStyle: {
       accessToken: null,
       error: false,
@@ -183,11 +233,8 @@ test('#mapStyleReducer -> RECEIVE_MAP_CONFIG', t => {
       url: null,
       custom: true
     },
-    threeDBuildingColor: [
-      194.6103322548211,
-      191.81688250953655,
-      185.2988331038727
-    ],
+    threeDBuildingColor: [1, 2, 3],
+    custom3DBuildingColor: true,
     initialState: {},
     bottomMapStyle: {layers: [], name: 'smoothie_the_cat'},
     topMapStyle: null,

@@ -210,6 +210,8 @@ export const sliderInputWidth = 50;
 
 // Plot
 export const rangeBrushBgd = '#3A414C';
+export const histogramFillInRange = activeColor;
+export const histogramFillOutRange = sliderBarColor;
 
 // Notification
 export const notificationColors = {
@@ -222,6 +224,13 @@ export const notificationColors = {
 export const notificationPanelWidth = 240;
 export const notificationPanelItemWidth = notificationPanelWidth - 60;
 export const notificationPanelItemHeight = 60;
+
+// Datagrid
+const columnWidth = 200;
+const cellHeaderHeight = 72;
+const cellHeight = 48;
+const gridDefaultWidth = 800;
+const gridDefaultHeight = 600;
 
 export const textTruncate = {
   maxWidth: '100%',
@@ -938,12 +947,21 @@ export const theme = {
 
   // Plot
   rangeBrushBgd,
+  histogramFillInRange,
+  histogramFillOutRange,
 
   // Notifications
   notificationColors,
   notificationPanelWidth,
   notificationPanelItemWidth,
   notificationPanelItemHeight,
+
+  // datagrid
+  columnWidth,
+  cellHeaderHeight,
+  cellHeight,
+  gridDefaultWidth,
+  gridDefaultHeight,
 
   // Breakpoints
   breakPoints
